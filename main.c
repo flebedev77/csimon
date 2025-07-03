@@ -6,7 +6,11 @@
 
 #define APP_TITLE "Simon"
 #define SEQUENCE_CAPACITY 100
-#define SEQUENCE_DISPLAY_RATE 1
+#define INITIAL_SEQUENCE_DISPLAY_RATE 0.6
+#define SEQUENCE_DISPLAY_RATE_ACCELERATION 0.1
+#define SEQUENCE_DISPLAT_RATE_ACCELERATION_DECCELERATION 0.02
+
+#define OFF_TO_ON_SHOWING_SEQUENCE_RATIO 3
 
 #define MAX_CONTROLLER_AMOUNT 8
 
@@ -19,13 +23,17 @@ static int sequence[SEQUENCE_CAPACITY];
 static int sequenceLength = 1;
 static int sequenceDisplayIndex = 0;
 
+static float sequenceDisplayRateAcceleration = SEQUENCE_DISPLAY_RATE_ACCELERATION;
+static float sequenceDisplayRate = INITIAL_SEQUENCE_DISPLAY_RATE;
 static float sequenceDisplayDelay = 0.f;
 
 static int playerSequence[SEQUENCE_CAPACITY]; 
+static int playerSequenceIndex = 0;
 static int playerSequenceLength = 0;
 
 static bool buttonsLit[BUTTON_AMOUNT];
 static bool gamepadButtonsDown[BUTTON_AMOUNT];
+static int gamepadButtonPressed = -1;
 
 static bool isShowingSequence = false;
 static bool isWaitingBetweenButton = false;
@@ -45,6 +53,14 @@ void ResetButtons()
   }
 }
 
+void AddButtonToSequence()
+{
+  sequenceLength++;
+  sequence[sequenceLength-1] = RandomButton(0);
+}
+
+void SoftReset();
+
 // Ran whenever the game boots up / reset
 void Reset()
 {
@@ -53,8 +69,10 @@ void Reset()
     sequence[i] = 0;
     playerSequence[i] = 0;
   }
-  sequenceLength = 10;
+  sequenceLength = 1;
+
   playerSequenceLength = 0;
+  playerSequenceIndex = 0;
 
   for (size_t i = 0; i < sequenceLength; i++)
   {
@@ -62,20 +80,24 @@ void Reset()
   }
 
   ResetButtons(); 
-
-  isShowingSequence = true;
-  sequenceDisplayIndex = 0;
-  sequenceDisplayDelay = 0.f;
+  SoftReset();
 }
 
 // Ran whenever player messes up, etc.
-void Init()
+void SoftReset()
 {
+  ResetButtons();
+  
   for (size_t i = 0; i < SEQUENCE_CAPACITY; i++)
   {
     playerSequence[i] = 0;
   } 
   playerSequenceLength = 0;
+  playerSequenceIndex = 0;
+
+  isShowingSequence = true;
+  sequenceDisplayIndex = 0;
+  sequenceDisplayDelay = 0.f;
 }
 
 
@@ -105,6 +127,13 @@ void DrawButtons()
   gamepadButtonsDown[1] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_UP);    // Y
   gamepadButtonsDown[2] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_RIGHT); // B
   gamepadButtonsDown[3] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_DOWN);  // A
+  
+  gamepadButtonPressed = -1;
+  if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_LEFT)) gamepadButtonPressed = 0;
+  if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_UP)) gamepadButtonPressed = 1;
+  if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) gamepadButtonPressed = 2;
+  if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) gamepadButtonPressed = 3;
+
 
   if (!isShowingSequence)
   {
@@ -151,9 +180,9 @@ int main(void)
 
       if (isShowingSequence)
       {
-        sequenceDisplayDelay += (!isWaitingBetweenButton) ? deltaTime * 3.f : deltaTime;
+        sequenceDisplayDelay += (!isWaitingBetweenButton) ? deltaTime * OFF_TO_ON_SHOWING_SEQUENCE_RATIO : deltaTime;
 
-        if (sequenceDisplayDelay > SEQUENCE_DISPLAY_RATE)
+        if (sequenceDisplayDelay > sequenceDisplayRate)
         {
           sequenceDisplayDelay = 0.f;
   
@@ -173,7 +202,29 @@ int main(void)
           } else
           {
             sequenceDisplayIndex = 0;
+            playerSequenceIndex = 0;
             isShowingSequence = false;
+          }
+        }
+      } else
+      {
+        if (gamepadButtonPressed != -1)
+        {
+          if (gamepadButtonPressed == sequence[playerSequenceIndex])
+          {
+            playerSequenceIndex++;
+
+            if (playerSequenceIndex >= sequenceLength)
+            {
+              sequenceDisplayRate -= sequenceDisplayRateAcceleration;
+              sequenceDisplayRateAcceleration -= SEQUENCE_DISPLAT_RATE_ACCELERATION_DECCELERATION;
+              SoftReset(); 
+              AddButtonToSequence();
+            }
+          } else
+          {
+            //handle wrong
+            CloseWindow();
           }
         }
       }
