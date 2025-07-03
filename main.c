@@ -8,7 +8,7 @@
 #define SEQUENCE_CAPACITY 100
 #define INITIAL_SEQUENCE_DISPLAY_RATE 0.6
 #define SEQUENCE_DISPLAY_RATE_ACCELERATION 0.1
-#define SEQUENCE_DISPLAY_RATE_ACCELERATION_DECCELERATION 0.02
+#define SEQUENCE_DISPLAY_RATE_ACCELERATION_DECCELERATION 0.01
 
 #define OFF_TO_ON_SHOWING_SEQUENCE_RATIO 3
 
@@ -17,6 +17,8 @@
 #define BUTTON_AMOUNT 4
 
 #define SAVEFILE_FILEPATH ".csimon"
+
+#define GAMEOVER_BLINK_AMOUNT 3
 
 static int score = 0;
 static int highScore = 0;
@@ -32,6 +34,8 @@ static float sequenceDisplayRateAcceleration = SEQUENCE_DISPLAY_RATE_ACCELERATIO
 static float sequenceDisplayRate = INITIAL_SEQUENCE_DISPLAY_RATE;
 static float sequenceDisplayDelay = 0.f;
 
+static float runDuration = 0.f;
+
 static int playerSequence[SEQUENCE_CAPACITY]; 
 static int playerSequenceIndex = 0;
 static int playerSequenceLength = 0;
@@ -42,6 +46,13 @@ static int gamepadButtonPressed = -1;
 
 static bool isShowingSequence = false;
 static bool isWaitingBetweenButton = false;
+static bool isShowingButtonAnimation = false;
+
+static int animationType;
+static enum { ANIMATION_TYPE_GAMEOVER };
+
+static int gameoverAnimationBlinkCount = 0;
+static int gameoverBlinkAnimationState = 0;
 
 //Helpers
 bool IsGamepadButtonDownAny(int button)
@@ -76,6 +87,23 @@ void AddButtonToSequence()
   sequence[sequenceLength-1] = RandomButton(0);
 }
 
+void ResetButtons()
+{
+  for (size_t i = 0; i < BUTTON_AMOUNT; i++)
+  {
+    buttonsLit[i] = false;
+    gamepadButtonsDown[i] = false;
+  }
+}
+
+void LightButtons()
+{
+  for (size_t i = 0; i < BUTTON_AMOUNT; i++)
+  {
+    buttonsLit[i] = true;
+  }
+}
+
 // We read / writing in binary mode, to prevent skids from editing the savefile
 void WriteSave()
 {
@@ -88,13 +116,13 @@ void WriteSave()
     return;
   }
 
-  // Add paddings to discourage persistent skids
+  // Add paddings and bit shifts to discourage persistent skids
   int writeData[] = {
     10,
     255,
     15,
 
-    highScore,
+    highScore << 4,
 
     15,
     255,
@@ -143,7 +171,7 @@ void ReadSave()
 
   if (readableSave)
   {
-    highScore = readData[3];
+    highScore = readData[3] >> 4;
   } else
   {
     perror("Savefile is corrupt");
@@ -153,14 +181,6 @@ void ReadSave()
 }
 
 //Reseting
-void ResetButtons()
-{
-  for (size_t i = 0; i < BUTTON_AMOUNT; i++)
-  {
-    buttonsLit[i] = false;
-    gamepadButtonsDown[i] = false;
-  }
-}
 
 // Ran whenever player messes up, etc.
 void SoftReset()
@@ -175,14 +195,20 @@ void SoftReset()
   playerSequenceIndex = 0;
 
   isShowingSequence = true;
+  isShowingButtonAnimation = false;
   sequenceDisplayIndex = 0;
   sequenceDisplayDelay = 0.f;
+
+  gameoverAnimationBlinkCount = 0;
+  gameoverBlinkAnimationState = 0;
 }
 
 // Ran whenever the game boots up / reset
 void Reset()
 {
   score = 0;
+
+  runDuration = 0.f;
 
   for (size_t i = 0; i < SEQUENCE_CAPACITY; i++)
   {
@@ -201,6 +227,9 @@ void Reset()
 
   ResetButtons(); 
   SoftReset();
+
+  sequenceDisplayRate = INITIAL_SEQUENCE_DISPLAY_RATE;
+  sequenceDisplayRateAcceleration = SEQUENCE_DISPLAY_RATE_ACCELERATION;
 }
 
 // Input / Drawing
@@ -218,7 +247,7 @@ void DrawButtons()
   if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) gamepadButtonPressed = 3;
 
 
-  if (!isShowingSequence)
+  if (!isShowingSequence && !isShowingButtonAnimation)
   {
     for (size_t i = 0; i < BUTTON_AMOUNT; i++)
     {
@@ -252,6 +281,7 @@ int main(void)
     while (!WindowShouldClose())    
     {
       float deltaTime = GetFrameTime();
+      runDuration += deltaTime;
 
       BeginDrawing();
       ClearBackground(RAYWHITE);
@@ -264,7 +294,7 @@ int main(void)
       }
 
 
-      if (isShowingSequence)
+      if (isShowingSequence && !isShowingButtonAnimation)
       {
         sequenceDisplayDelay += (!isWaitingBetweenButton) ? deltaTime * OFF_TO_ON_SHOWING_SEQUENCE_RATIO : deltaTime;
 
@@ -292,7 +322,7 @@ int main(void)
             isShowingSequence = false;
           }
         }
-      } else
+      } else if (!isShowingButtonAnimation)
       {
         if (gamepadButtonPressed != -1)
         {
@@ -302,8 +332,18 @@ int main(void)
 
             if (playerSequenceIndex >= sequenceLength)
             {
-              sequenceDisplayRate -= sequenceDisplayRateAcceleration;
-              sequenceDisplayRateAcceleration -= SEQUENCE_DISPLAY_RATE_ACCELERATION_DECCELERATION;
+              if (sequenceDisplayRate > 0.3f)
+              {
+                sequenceDisplayRate -= sequenceDisplayRateAcceleration;
+              }
+              if (sequenceDisplayRateAcceleration > 0.f)
+              {
+                sequenceDisplayRateAcceleration -= SEQUENCE_DISPLAY_RATE_ACCELERATION_DECCELERATION;
+              }
+              if (sequenceDisplayRateAcceleration < 0.f)
+              {
+                sequenceDisplayRateAcceleration = 0.f;
+              }
               score += playerSequenceIndex;
               SoftReset(); 
               AddButtonToSequence();
@@ -311,6 +351,33 @@ int main(void)
           } else
           {
             Reset();
+            isShowingButtonAnimation = true;
+            animationType = ANIMATION_TYPE_GAMEOVER;
+          }
+        }
+      }
+
+      if (isShowingButtonAnimation)
+      {
+        if (animationType == ANIMATION_TYPE_GAMEOVER)
+        {
+          if ((int)(runDuration*5.f) % 3 < 2) 
+          {
+            if (gameoverBlinkAnimationState)
+            {
+              gameoverAnimationBlinkCount++;
+            }
+            LightButtons();
+            gameoverBlinkAnimationState = 0;
+          } else
+          {
+            gameoverBlinkAnimationState = 1;
+            ResetButtons();
+
+            if (gameoverAnimationBlinkCount >= GAMEOVER_BLINK_AMOUNT-1)
+            {
+              Reset();
+            }
           }
         }
       }
