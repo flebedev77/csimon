@@ -8,13 +8,15 @@
 #define SEQUENCE_CAPACITY 100
 #define INITIAL_SEQUENCE_DISPLAY_RATE 0.6
 #define SEQUENCE_DISPLAY_RATE_ACCELERATION 0.1
-#define SEQUENCE_DISPLAT_RATE_ACCELERATION_DECCELERATION 0.02
+#define SEQUENCE_DISPLAY_RATE_ACCELERATION_DECCELERATION 0.02
 
 #define OFF_TO_ON_SHOWING_SEQUENCE_RATIO 3
 
 #define MAX_CONTROLLER_AMOUNT 8
 
 #define BUTTON_AMOUNT 4
+
+static int score = 0;
 
 static int screenWidth = 0;
 static int screenHeight = 0;
@@ -64,6 +66,8 @@ void SoftReset();
 // Ran whenever the game boots up / reset
 void Reset()
 {
+  score = 0;
+
   for (size_t i = 0; i < SEQUENCE_CAPACITY; i++)
   {
     sequence[i] = 0;
@@ -217,17 +221,21 @@ int main(void)
             if (playerSequenceIndex >= sequenceLength)
             {
               sequenceDisplayRate -= sequenceDisplayRateAcceleration;
-              sequenceDisplayRateAcceleration -= SEQUENCE_DISPLAT_RATE_ACCELERATION_DECCELERATION;
+              sequenceDisplayRateAcceleration -= SEQUENCE_DISPLAY_RATE_ACCELERATION_DECCELERATION;
+              score += playerSequenceIndex;
               SoftReset(); 
               AddButtonToSequence();
             }
           } else
           {
-            //handle wrong
-            CloseWindow();
+            Reset();
           }
         }
       }
+      
+      char buf[100];
+      snprintf(buf, sizeof(buf), "Score: %d", score + playerSequenceIndex);
+      DrawText(buf, 10, 10, 20, DARKGRAY);
 
       if (IsGamepadButtonDownAny(GAMEPAD_BUTTON_MIDDLE_LEFT))
         break;
