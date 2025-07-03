@@ -16,7 +16,10 @@
 
 #define BUTTON_AMOUNT 4
 
+#define SAVEFILE_FILEPATH ".csimon"
+
 static int score = 0;
+static int highScore = 0;
 
 static int screenWidth = 0;
 static int screenHeight = 0;
@@ -73,6 +76,81 @@ void AddButtonToSequence()
   sequence[sequenceLength-1] = RandomButton(0);
 }
 
+// We read / writing in binary mode, to prevent skids from editing the savefile
+void WriteSave()
+{
+  printf("Writing savefile at %s\n", SAVEFILE_FILEPATH);
+  FILE* file = fopen(SAVEFILE_FILEPATH, "wb");
+
+  if (file == NULL)
+  {
+    perror("Error writing savefile");
+    return;
+  }
+
+  // Add paddings to discourage persistent skids
+  int writeData[] = {
+    10,
+    255,
+    15,
+
+    highScore,
+
+    15,
+    255,
+    10
+  };
+  size_t count = sizeof(writeData) / sizeof(int);
+
+  size_t writtenCount = fwrite(writeData, sizeof(int), count, file);
+
+  if (writtenCount != count)
+  {
+    perror("Could not write entire savefile");
+  }
+  
+  fclose(file);
+}
+
+void ReadSave()
+{
+  printf("Reading savefile at %s\n", SAVEFILE_FILEPATH);
+  FILE* file = fopen(SAVEFILE_FILEPATH, "rb");
+
+  if (file == NULL)
+  {
+    perror("Error reading savefile");
+    return;
+  }
+
+  int readData[7];
+  size_t count = sizeof(readData) / sizeof(int);
+
+  size_t readCount = fread(readData, sizeof(int), count, file);
+  if (readCount != count)
+  {
+    perror("Could not read entire savefile, expect your progress not loaded");
+  }
+
+  bool readableSave = true;
+
+  if (readData[0] != 10) readableSave = false;
+  if (readData[1] != 255) readableSave = false;
+  if (readData[2] != 15) readableSave = false;
+  if (readData[4] != 15) readableSave = false;
+  if (readData[5] != 255) readableSave = false;
+  if (readData[6] != 10) readableSave = false;
+
+  if (readableSave)
+  {
+    highScore = readData[3];
+  } else
+  {
+    perror("Savefile is corrupt");
+  }
+
+  fclose(file);
+}
 
 //Reseting
 void ResetButtons()
@@ -168,6 +246,8 @@ int main(void)
     SetTargetFPS(60);               
 
     SetWindowState(FLAG_FULLSCREEN_MODE);
+
+    ReadSave();
     
     while (!WindowShouldClose())    
     {
@@ -234,14 +314,25 @@ int main(void)
           }
         }
       }
+
+      if (score > highScore)
+      {
+        highScore = score;
+      }
       
       char buf[100];
       snprintf(buf, sizeof(buf), "Score: %d", score + playerSequenceIndex);
       DrawText(buf, 10, 10, 20, DARKGRAY);
 
+      snprintf(buf, sizeof(buf), "Best: %d", highScore);
+      DrawText(buf, 10, 30, 20, DARKGRAY);
+
+
       if (IsGamepadButtonDownAny(GAMEPAD_BUTTON_MIDDLE_LEFT))
         break;
     }
+
+    WriteSave();
 
     CloseWindow();        
     return 0;
