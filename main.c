@@ -6,6 +6,7 @@
 
 #define APP_TITLE "Simon"
 #define SEQUENCE_CAPACITY 100
+#define SEQUENCE_DISPLAY_RATE 1
 
 #define MAX_CONTROLLER_AMOUNT 8
 
@@ -16,6 +17,9 @@ static int screenHeight = 0;
 
 static int sequence[SEQUENCE_CAPACITY];
 static int sequenceLength = 1;
+static int sequenceDisplayIndex = 0;
+
+static float sequenceDisplayDelay = 0.f;
 
 static int playerSequence[SEQUENCE_CAPACITY]; 
 static int playerSequenceLength = 0;
@@ -24,11 +28,21 @@ static bool buttonsLit[BUTTON_AMOUNT];
 static bool gamepadButtonsDown[BUTTON_AMOUNT];
 
 static bool isShowingSequence = false;
+static bool isWaitingBetweenButton = false;
 
 int RandomButton(unsigned int seed)
 {
   srand(time(0) + seed);
   return rand() % 4;
+}
+
+void ResetButtons()
+{
+  for (size_t i = 0; i < BUTTON_AMOUNT; i++)
+  {
+    buttonsLit[i] = false;
+    gamepadButtonsDown[i] = false;
+  }
 }
 
 // Ran whenever the game boots up / reset
@@ -39,16 +53,19 @@ void Reset()
     sequence[i] = 0;
     playerSequence[i] = 0;
   }
-  sequenceLength = 1;
+  sequenceLength = 10;
   playerSequenceLength = 0;
 
-  sequence[0] = RandomButton(0);
-
-  for (size_t i = 0; i < BUTTON_AMOUNT; i++)
+  for (size_t i = 0; i < sequenceLength; i++)
   {
-    buttonsLit[i] = false;
-    gamepadButtonsDown[i] = false;
+    sequence[i] = RandomButton(i*100);
   }
+
+  ResetButtons(); 
+
+  isShowingSequence = true;
+  sequenceDisplayIndex = 0;
+  sequenceDisplayDelay = 0.f;
 }
 
 // Ran whenever player messes up, etc.
@@ -119,6 +136,8 @@ int main(void)
     
     while (!WindowShouldClose())    
     {
+      float deltaTime = GetFrameTime();
+
       BeginDrawing();
       ClearBackground(RAYWHITE);
       DrawButtons();
@@ -127,6 +146,36 @@ int main(void)
       if (IsKeyPressed(KEY_ZERO))
       {
         isShowingSequence = !isShowingSequence;
+      }
+
+
+      if (isShowingSequence)
+      {
+        sequenceDisplayDelay += (!isWaitingBetweenButton) ? deltaTime * 3.f : deltaTime;
+
+        if (sequenceDisplayDelay > SEQUENCE_DISPLAY_RATE)
+        {
+          sequenceDisplayDelay = 0.f;
+  
+          if (sequenceDisplayIndex < sequenceLength)
+          {
+            if (isWaitingBetweenButton)
+            {
+              ResetButtons();
+              isWaitingBetweenButton = false;
+            } else
+            {
+              buttonsLit[sequence[sequenceDisplayIndex]] = true;
+              isWaitingBetweenButton = true;
+
+              sequenceDisplayIndex++;
+            }
+          } else
+          {
+            sequenceDisplayIndex = 0;
+            isShowingSequence = false;
+          }
+        }
       }
 
       if (IsGamepadButtonDownAny(GAMEPAD_BUTTON_MIDDLE_LEFT))
