@@ -40,12 +40,41 @@ static int gamepadButtonPressed = -1;
 static bool isShowingSequence = false;
 static bool isWaitingBetweenButton = false;
 
+//Helpers
+bool IsGamepadButtonDownAny(int button)
+{
+  for (size_t i = 0; i < MAX_CONTROLLER_AMOUNT; i++)
+  {
+    if (IsGamepadAvailable(i) && IsGamepadButtonDown(i, button))
+      return true;
+  }
+  return false;
+}
+
+bool IsGamepadButtonPressedAny(int button)
+{
+  for (size_t i = 0; i < MAX_CONTROLLER_AMOUNT; i++)
+  {
+    if (IsGamepadAvailable(i) && IsGamepadButtonPressed(i, button))
+      return true;
+  }
+  return false;
+}
+
 int RandomButton(unsigned int seed)
 {
   srand(time(0) + seed);
   return rand() % 4;
 }
 
+void AddButtonToSequence()
+{
+  sequenceLength++;
+  sequence[sequenceLength-1] = RandomButton(0);
+}
+
+
+//Reseting
 void ResetButtons()
 {
   for (size_t i = 0; i < BUTTON_AMOUNT; i++)
@@ -55,13 +84,22 @@ void ResetButtons()
   }
 }
 
-void AddButtonToSequence()
+// Ran whenever player messes up, etc.
+void SoftReset()
 {
-  sequenceLength++;
-  sequence[sequenceLength-1] = RandomButton(0);
-}
+  ResetButtons();
+  
+  for (size_t i = 0; i < SEQUENCE_CAPACITY; i++)
+  {
+    playerSequence[i] = 0;
+  } 
+  playerSequenceLength = 0;
+  playerSequenceIndex = 0;
 
-void SoftReset();
+  isShowingSequence = true;
+  sequenceDisplayIndex = 0;
+  sequenceDisplayDelay = 0.f;
+}
 
 // Ran whenever the game boots up / reset
 void Reset()
@@ -87,44 +125,7 @@ void Reset()
   SoftReset();
 }
 
-// Ran whenever player messes up, etc.
-void SoftReset()
-{
-  ResetButtons();
-  
-  for (size_t i = 0; i < SEQUENCE_CAPACITY; i++)
-  {
-    playerSequence[i] = 0;
-  } 
-  playerSequenceLength = 0;
-  playerSequenceIndex = 0;
-
-  isShowingSequence = true;
-  sequenceDisplayIndex = 0;
-  sequenceDisplayDelay = 0.f;
-}
-
-
-bool IsGamepadButtonDownAny(int button)
-{
-  for (size_t i = 0; i < MAX_CONTROLLER_AMOUNT; i++)
-  {
-    if (IsGamepadAvailable(i) && IsGamepadButtonDown(i, button))
-      return true;
-  }
-  return false;
-}
-
-bool IsGamepadButtonPressedAny(int button)
-{
-  for (size_t i = 0; i < MAX_CONTROLLER_AMOUNT; i++)
-  {
-    if (IsGamepadAvailable(i) && IsGamepadButtonPressed(i, button))
-      return true;
-  }
-  return false;
-}
-
+// Input / Drawing
 void DrawButtons()
 {
   gamepadButtonsDown[0] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_LEFT);  // X
@@ -153,6 +154,7 @@ void DrawButtons()
   DrawCircle(screenWidth/2, screenHeight/2 + 100, 50, buttonsLit[3] ? ORANGE : WHITE);
 }
 
+// Logic
 int main(void)
 {
     Reset();
