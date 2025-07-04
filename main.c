@@ -397,7 +397,7 @@ int main(void)
     
     while (!WindowShouldClose())    
     {
-      DrawFPS(10, screenHeight - 50);
+      //DrawFPS(10, screenHeight - 50);
       char buf[100];
       deltaTime = GetFrameTime();
       runDuration += deltaTime;
