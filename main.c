@@ -30,6 +30,8 @@
 
 #define AUTHOR "Made by flebedev77"
 
+#define GAMEPAD_AXISREGISTERTHRESHOLD 0.6
+
 static int score = 0;
 static int highScore = 0;
 
@@ -95,6 +97,35 @@ bool IsGamepadButtonDownAny(int button)
   {
     if (IsGamepadAvailable(i) && IsGamepadButtonDown(i, button))
       return true;
+  }
+  return false;
+}
+
+bool IsGamepadAxisDownAny(int button)
+{
+  for (size_t i = 0; i < MAX_CONTROLLER_AMOUNT; i++)
+  {
+    if (IsGamepadAvailable(i) && GetGamepadAxisMovement(i, button) > GAMEPAD_AXISREGISTERTHRESHOLD)
+      return true;
+  }
+  return false;
+}
+
+static bool prevGamepadAxisState = false;
+
+bool IsGamepadAxisPressedAny(int button)
+{
+  for (size_t i = 0; i < MAX_CONTROLLER_AMOUNT; i++)
+  {
+    if (IsGamepadAvailable(i) && GetGamepadAxisMovement(i, button) > GAMEPAD_AXISREGISTERTHRESHOLD)
+    {
+      bool ret = prevGamepadAxisState == false; 
+      prevGamepadAxisState = true;
+      return ret;
+    } else if (GetGamepadAxisMovement(i, button) <= GAMEPAD_AXISREGISTERTHRESHOLD)
+    {
+      prevGamepadAxisState = false;
+    }
   }
   return false;
 }
@@ -287,14 +318,18 @@ void Reset()
 // Input / Drawing
 void DrawButtons()
 {
-  gamepadButtonsDown[0] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_LEFT);  // X
-  gamepadButtonsDown[1] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_UP);    // Y
+  gamepadButtonsDown[0] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_LEFT) ||
+    IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_TRIGGER_1);  // X / RShoulder
+  gamepadButtonsDown[1] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_UP) ||
+    IsGamepadAxisDownAny(GAMEPAD_AXIS_LEFT_TRIGGER);    // Y / LTrigger
   gamepadButtonsDown[2] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_RIGHT); // B
   gamepadButtonsDown[3] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_DOWN);  // A
   
   gamepadButtonPressed = -1;
-  if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_LEFT)) gamepadButtonPressed = 0;
-  if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_UP)) gamepadButtonPressed = 1;
+  if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_LEFT) ||
+      IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_TRIGGER_1)) gamepadButtonPressed = 0;
+  if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_UP) ||
+      IsGamepadAxisPressedAny(GAMEPAD_AXIS_LEFT_TRIGGER)) gamepadButtonPressed = 1;
   if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) gamepadButtonPressed = 2;
   if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) gamepadButtonPressed = 3;
 
@@ -312,7 +347,7 @@ void DrawButtons()
 
   Color targetButtonColors[4];
   targetButtonColors[0] = buttonsLit[0] ? GREEN  : BUTTON_UNLIT_COLOR;
-  targetButtonColors[1] = buttonsLit[1] ? YELLOW : BUTTON_UNLIT_COLOR;
+  targetButtonColors[1] = buttonsLit[1] ? BLUE   : BUTTON_UNLIT_COLOR;
   targetButtonColors[2] = buttonsLit[2] ? RED    : BUTTON_UNLIT_COLOR;
   targetButtonColors[3] = buttonsLit[3] ? ORANGE : BUTTON_UNLIT_COLOR;
 
@@ -331,8 +366,6 @@ void DrawButtons()
   buttonSizes[1] = LerpFloat(buttonSizes[1], targetButtonSizes[1], BUTTON_SIZE_INTERPOLATION);
   buttonSizes[2] = LerpFloat(buttonSizes[2], targetButtonSizes[2], BUTTON_SIZE_INTERPOLATION);
   buttonSizes[3] = LerpFloat(buttonSizes[3], targetButtonSizes[3], BUTTON_SIZE_INTERPOLATION);
-
-
 
   DrawCircle(screenWidth/2 - 100, screenHeight/2, buttonSizes[0], buttonColors[0]);
   DrawCircle(screenWidth/2, screenHeight/2 - 100, buttonSizes[1], buttonColors[1]);
@@ -385,6 +418,7 @@ int main(void)
     screenHeight = GetRenderHeight();
 
     SetTargetFPS(60);               
+    HideCursor();
 
     SetWindowState(FLAG_FULLSCREEN_MODE);
 
@@ -465,10 +499,8 @@ int main(void)
                     sequenceDisplayRateAcceleration = 0.f;
                   }
                   score += playerSequenceIndex;
-                  int prevPlayerSequenceIndex = playerSequenceIndex;
                   SoftReset(); 
                   AddButtonToSequence();
-                  playerSequenceIndex = prevPlayerSequenceIndex;
 
                   gameState = GAMESTATE_WAITING;
                   gameStateAfterWait = GAMESTATE_GAME;
@@ -521,7 +553,7 @@ int main(void)
         DrawTextEx(font, buf, (Vector2){ (float)(screenWidth / 2 - texDimensions.x / 2), (float)(screenHeight - 100) }, (float)font.baseSize, 2, DARKGRAY);
       }
 
-      snprintf(buf, sizeof(buf), "Score: %d", score + playerSequenceIndex);
+      snprintf(buf, sizeof(buf), "Score: %d", score);
       DrawTextEx(fontSm, buf, (Vector2){ 10.f, 10.f }, (float)fontSm.baseSize, 2, DARKGRAY);
 
       snprintf(buf, sizeof(buf), "Best: %d", highScore);
