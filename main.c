@@ -4,6 +4,8 @@
 #include <time.h>
 #include <raylib.h>
 
+#include "res/roboto.h"
+
 #define APP_TITLE "Simon"
 #define SEQUENCE_CAPACITY 100
 #define INITIAL_SEQUENCE_DISPLAY_RATE 0.6
@@ -18,6 +20,8 @@
 
 #define SAVEFILE_FILEPATH ".csimon"
 
+#define MENU_TITLE "PRESS START"
+#define GAMEOVER_TITLE "GAME OVER!"
 #define GAMEOVER_BLINK_AMOUNT 3
 
 static int score = 0;
@@ -53,6 +57,23 @@ static enum { ANIMATION_TYPE_GAMEOVER };
 
 static int gameoverAnimationBlinkCount = 0;
 static int gameoverBlinkAnimationState = 0;
+
+static int gameState;
+static int gameStateAfterWait;
+static float gameStateWaitDuration;
+static float gameStateWaitRate = 0.f;
+static enum {
+ GAMESTATE_MENU,
+ GAMESTATE_MENU_GAMEOVER,
+ GAMESTATE_GAME,
+ GAMESTATE_WAITING
+};
+
+static const Color BUTTON_UNLIT_COLOR = { 200, 200, 200, 255 };
+
+static Font font;
+static Font fontSm;
+static Font fontLg;
 
 //Helpers
 bool IsGamepadButtonDownAny(int button)
@@ -185,8 +206,6 @@ void ReadSave()
 // Ran whenever player messes up, etc.
 void SoftReset()
 {
-  ResetButtons();
-  
   for (size_t i = 0; i < SEQUENCE_CAPACITY; i++)
   {
     playerSequence[i] = 0;
@@ -201,11 +220,17 @@ void SoftReset()
 
   gameoverAnimationBlinkCount = 0;
   gameoverBlinkAnimationState = 0;
+
+  gameStateWaitDuration = 0.f;
+  gameStateWaitRate = 0.f;
 }
 
 // Ran whenever the game boots up / reset
 void Reset()
 {
+
+  ResetButtons();
+
   score = 0;
 
   runDuration = 0.f;
@@ -230,6 +255,9 @@ void Reset()
 
   sequenceDisplayRate = INITIAL_SEQUENCE_DISPLAY_RATE;
   sequenceDisplayRateAcceleration = SEQUENCE_DISPLAY_RATE_ACCELERATION;
+
+  gameState = GAMESTATE_MENU;
+  gameStateAfterWait = GAMESTATE_MENU;
 }
 
 // Input / Drawing
@@ -247,7 +275,10 @@ void DrawButtons()
   if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) gamepadButtonPressed = 3;
 
 
-  if (!isShowingSequence && !isShowingButtonAnimation)
+  if (
+      (!isShowingSequence && !isShowingButtonAnimation) ||
+      (gameState == GAMESTATE_WAITING && !isShowingSequence)
+     )
   {
     for (size_t i = 0; i < BUTTON_AMOUNT; i++)
     {
@@ -255,10 +286,37 @@ void DrawButtons()
     }
   }
 
-  DrawCircle(screenWidth/2 - 100, screenHeight/2, 50, buttonsLit[0] ? GREEN : WHITE);
-  DrawCircle(screenWidth/2, screenHeight/2 - 100, 50, buttonsLit[1] ? YELLOW : WHITE);
-  DrawCircle(screenWidth/2 + 100, screenHeight/2, 50, buttonsLit[2] ? RED : WHITE);
-  DrawCircle(screenWidth/2, screenHeight/2 + 100, 50, buttonsLit[3] ? ORANGE : WHITE);
+  DrawCircle(screenWidth/2 - 100, screenHeight/2, 50, buttonsLit[0] ? GREEN : BUTTON_UNLIT_COLOR);
+  DrawCircle(screenWidth/2, screenHeight/2 - 100, 50, buttonsLit[1] ? YELLOW : BUTTON_UNLIT_COLOR);
+  DrawCircle(screenWidth/2 + 100, screenHeight/2, 50, buttonsLit[2] ? RED : BUTTON_UNLIT_COLOR);
+  DrawCircle(screenWidth/2, screenHeight/2 + 100, 50, buttonsLit[3] ? ORANGE : BUTTON_UNLIT_COLOR);
+}
+
+void DrawMenu(bool isGameoverMenu)
+{
+  if (IsGamepadButtonDownAny(GAMEPAD_BUTTON_MIDDLE_RIGHT))
+  {
+    gameState = GAMESTATE_GAME;
+  }
+
+  if (isGameoverMenu)
+  {
+    Vector2 gameOverTitleDimensions = MeasureTextEx(fontLg, GAMEOVER_TITLE, (float)fontLg.baseSize, 2);  
+    DrawTextEx(fontLg, GAMEOVER_TITLE, (Vector2){
+          (float)(screenWidth/2 - gameOverTitleDimensions.x/2),
+          (float)(screenHeight/2 - gameOverTitleDimensions.y/2) - 250.f
+        }, (float)fontLg.baseSize, 2, DARKGRAY);
+  }
+
+  if ((int)(runDuration * 15.f) % 15 > 7)
+  {
+    Vector2 menuTitleDimensions = MeasureTextEx(fontLg, MENU_TITLE, (float)fontLg.baseSize, 2);
+    DrawTextEx(fontLg, MENU_TITLE, (Vector2){
+        (float)(screenWidth/2 - menuTitleDimensions.x/2),
+        (float)(screenHeight/2 - fontLg.baseSize/2)
+        }, (float)fontLg.baseSize, 2, DARKGRAY);
+
+  }
 }
 
 // Logic
@@ -277,85 +335,140 @@ int main(void)
     SetWindowState(FLAG_FULLSCREEN_MODE);
 
     ReadSave();
+
+    font = LoadFontFromMemory(".ttf", RobotoRegular, RobotoRegular_len, 30, 0, 0);
+    fontSm = LoadFontFromMemory(".ttf", RobotoRegular, RobotoRegular_len, 20, 0, 0);
+    fontLg = LoadFontFromMemory(".ttf", RobotoRegular, RobotoRegular_len, 50, 0, 0);
+
     
     while (!WindowShouldClose())    
     {
+      char buf[100];
       float deltaTime = GetFrameTime();
       runDuration += deltaTime;
 
       BeginDrawing();
       ClearBackground(RAYWHITE);
       DrawButtons();
-      EndDrawing();
 
       if (IsKeyPressed(KEY_ZERO))
       {
         isShowingSequence = !isShowingSequence;
       }
 
-
-      if (isShowingSequence && !isShowingButtonAnimation)
+      switch (gameState)
       {
-        sequenceDisplayDelay += (!isWaitingBetweenButton) ? deltaTime * OFF_TO_ON_SHOWING_SEQUENCE_RATIO : deltaTime;
-
-        if (sequenceDisplayDelay > sequenceDisplayRate)
-        {
-          sequenceDisplayDelay = 0.f;
-  
-          if (sequenceDisplayIndex < sequenceLength)
+        case GAMESTATE_GAME:
+          if (isShowingSequence && !isShowingButtonAnimation)
           {
-            if (isWaitingBetweenButton)
-            {
-              ResetButtons();
-              isWaitingBetweenButton = false;
-            } else
-            {
-              buttonsLit[sequence[sequenceDisplayIndex]] = true;
-              isWaitingBetweenButton = true;
+            sequenceDisplayDelay += (!isWaitingBetweenButton) ? deltaTime * OFF_TO_ON_SHOWING_SEQUENCE_RATIO : deltaTime;
 
-              sequenceDisplayIndex++;
+            if (sequenceDisplayDelay > sequenceDisplayRate)
+            {
+              sequenceDisplayDelay = 0.f;
+
+              if (sequenceDisplayIndex < sequenceLength)
+              {
+                if (isWaitingBetweenButton)
+                {
+                  ResetButtons();
+                  isWaitingBetweenButton = false;
+                } else
+                {
+                  buttonsLit[sequence[sequenceDisplayIndex]] = true;
+                  isWaitingBetweenButton = true;
+
+                  sequenceDisplayIndex++;
+                }
+              } else
+              {
+                sequenceDisplayIndex = 0;
+                playerSequenceIndex = 0;
+                isShowingSequence = false;
+              }
             }
-          } else
+          } else if (!isShowingButtonAnimation)
           {
-            sequenceDisplayIndex = 0;
+            if (gamepadButtonPressed != -1)
+            {
+              if (gamepadButtonPressed == sequence[playerSequenceIndex])
+              {
+                playerSequenceIndex++;
+
+                if (playerSequenceIndex >= sequenceLength)
+                {
+                  if (sequenceDisplayRate > 0.3f)
+                  {
+                    sequenceDisplayRate -= sequenceDisplayRateAcceleration;
+                  }
+                  if (sequenceDisplayRateAcceleration > 0.f)
+                  {
+                    sequenceDisplayRateAcceleration -= SEQUENCE_DISPLAY_RATE_ACCELERATION_DECCELERATION;
+                  }
+                  if (sequenceDisplayRateAcceleration < 0.f)
+                  {
+                    sequenceDisplayRateAcceleration = 0.f;
+                  }
+                  score += playerSequenceIndex;
+                  int prevPlayerSequenceIndex = playerSequenceIndex;
+                  SoftReset(); 
+                  AddButtonToSequence();
+                  playerSequenceIndex = prevPlayerSequenceIndex;
+
+                  gameState = GAMESTATE_WAITING;
+                  gameStateAfterWait = GAMESTATE_GAME;
+                  gameStateWaitDuration = 0.2f;
+                }
+              } else
+              {
+                Reset();
+                gameState = GAMESTATE_WAITING;
+                gameStateAfterWait = GAMESTATE_MENU_GAMEOVER;
+                gameStateWaitDuration = 2.f;
+                isShowingButtonAnimation = true;
+                animationType = ANIMATION_TYPE_GAMEOVER;
+              }
+            }
+          }
+
+          if (score > highScore)
+          {
+            highScore = score;
+          }
+
+          break;
+
+        case GAMESTATE_WAITING:
+          gameStateWaitRate += deltaTime;
+          if (gameStateWaitRate > gameStateWaitDuration)
+          {
+            gameStateWaitDuration = 0;
+            gameStateWaitRate = 0;
+            gameState = gameStateAfterWait;
             playerSequenceIndex = 0;
-            isShowingSequence = false;
-          }
-        }
-      } else if (!isShowingButtonAnimation)
-      {
-        if (gamepadButtonPressed != -1)
-        {
-          if (gamepadButtonPressed == sequence[playerSequenceIndex])
-          {
-            playerSequenceIndex++;
+            ResetButtons();
+          } 
+          break;
 
-            if (playerSequenceIndex >= sequenceLength)
-            {
-              if (sequenceDisplayRate > 0.3f)
-              {
-                sequenceDisplayRate -= sequenceDisplayRateAcceleration;
-              }
-              if (sequenceDisplayRateAcceleration > 0.f)
-              {
-                sequenceDisplayRateAcceleration -= SEQUENCE_DISPLAY_RATE_ACCELERATION_DECCELERATION;
-              }
-              if (sequenceDisplayRateAcceleration < 0.f)
-              {
-                sequenceDisplayRateAcceleration = 0.f;
-              }
-              score += playerSequenceIndex;
-              SoftReset(); 
-              AddButtonToSequence();
-            }
-          } else
-          {
-            Reset();
-            isShowingButtonAnimation = true;
-            animationType = ANIMATION_TYPE_GAMEOVER;
-          }
-        }
+        case GAMESTATE_MENU:
+          DrawMenu(false);
+          break;
+        case GAMESTATE_MENU_GAMEOVER:
+          DrawMenu(true); 
+          break;
+
       }
+
+      snprintf(buf, sizeof(buf), "%d/%d", playerSequenceIndex, sequenceLength);
+      Vector2 texDimensions = MeasureTextEx(font, buf, (float)font.baseSize, 2);
+      DrawTextEx(font, buf, (Vector2){ (float)(screenWidth / 2 - texDimensions.x / 2), (float)(screenHeight - 100) }, (float)font.baseSize, 2, DARKGRAY);
+
+      snprintf(buf, sizeof(buf), "Score: %d", score + playerSequenceIndex);
+      DrawTextEx(fontSm, buf, (Vector2){ 10.f, 10.f }, (float)fontSm.baseSize, 2, DARKGRAY);
+
+      snprintf(buf, sizeof(buf), "Best: %d", highScore);
+      DrawTextEx(fontSm, buf, (Vector2){ 10.0f, 30.0f }, (float)fontSm.baseSize, 2, DARKGRAY);
+
 
       if (isShowingButtonAnimation)
       {
@@ -376,24 +489,17 @@ int main(void)
 
             if (gameoverAnimationBlinkCount >= GAMEOVER_BLINK_AMOUNT-1)
             {
-              Reset();
+              gameState = GAMESTATE_MENU_GAMEOVER;
+              gameStateWaitRate = 0.f;
+              gameoverBlinkAnimationState = 0;
+              gameoverAnimationBlinkCount = 0;
+              isShowingButtonAnimation = false;
             }
           }
         }
       }
 
-      if (score > highScore)
-      {
-        highScore = score;
-      }
-      
-      char buf[100];
-      snprintf(buf, sizeof(buf), "Score: %d", score + playerSequenceIndex);
-      DrawText(buf, 10, 10, 20, DARKGRAY);
-
-      snprintf(buf, sizeof(buf), "Best: %d", highScore);
-      DrawText(buf, 10, 30, 20, DARKGRAY);
-
+      EndDrawing();
 
       if (IsGamepadButtonDownAny(GAMEPAD_BUTTON_MIDDLE_LEFT))
         break;
@@ -401,6 +507,9 @@ int main(void)
 
     WriteSave();
 
+    UnloadFont(font);
+    UnloadFont(fontSm);
+    UnloadFont(fontLg);
     CloseWindow();        
     return 0;
 }

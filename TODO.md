@@ -1,2 +1,3 @@
- - Display information about how much more left of the sequence to press at the bottom
  - Add menu
+ - Change font
+ - Add animations
