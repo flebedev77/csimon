@@ -2,3 +2,5 @@
 .csimon
 csimon
 csimon.exe
+build/*
+build/

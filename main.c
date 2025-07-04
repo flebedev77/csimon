@@ -35,8 +35,14 @@
 static int score = 0;
 static int highScore = 0;
 
-static int screenWidth = 0;
-static int screenHeight = 0;
+#ifdef __EMSCRIPTEN__
+  // Make it lowest resolution people generally use
+  static int screenWidth = 1366;
+  static int screenHeight = 768;
+#else
+  static int screenWidth = 0;
+  static int screenHeight = 0;
+#endif
 
 static int sequence[SEQUENCE_CAPACITY];
 static int sequenceLength = 1;
@@ -66,7 +72,7 @@ static bool isWaitingBetweenButton = false;
 static bool isShowingButtonAnimation = false;
 
 static int animationType;
-static enum { ANIMATION_TYPE_GAMEOVER };
+enum { ANIMATION_TYPE_GAMEOVER, ANIMATION_TYPE_WIN };
 
 static int gameoverAnimationBlinkCount = 0;
 static int gameoverBlinkAnimationState = 0;
@@ -75,7 +81,7 @@ static int gameState;
 static int gameStateAfterWait;
 static float gameStateWaitDuration;
 static float gameStateWaitRate = 0.f;
-static enum {
+enum {
  GAMESTATE_MENU,
  GAMESTATE_MENU_GAMEOVER,
  GAMESTATE_GAME,
@@ -318,20 +324,42 @@ void Reset()
 // Input / Drawing
 void DrawButtons()
 {
+  //Jank af
+#ifdef __EMSCRIPTEN__
+  gamepadButtonsDown[1] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_LEFT);  // X
+  gamepadButtonsDown[0] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_UP);    // Y
+#else
   gamepadButtonsDown[0] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_LEFT) ||
     IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_TRIGGER_1);  // X / RShoulder
   gamepadButtonsDown[1] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_UP) ||
     IsGamepadAxisDownAny(GAMEPAD_AXIS_LEFT_TRIGGER);    // Y / LTrigger
+#endif
   gamepadButtonsDown[2] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_RIGHT); // B
   gamepadButtonsDown[3] = IsGamepadButtonDownAny(GAMEPAD_BUTTON_RIGHT_FACE_DOWN);  // A
+
+  if (!gamepadButtonsDown[0]) gamepadButtonsDown[0] = IsKeyDown(KEY_LEFT);
+  if (!gamepadButtonsDown[1]) gamepadButtonsDown[1] = IsKeyDown(KEY_UP);
+  if (!gamepadButtonsDown[2]) gamepadButtonsDown[2] = IsKeyDown(KEY_RIGHT);
+  if (!gamepadButtonsDown[3]) gamepadButtonsDown[3] = IsKeyDown(KEY_DOWN);
+
   
   gamepadButtonPressed = -1;
+#ifdef __EMSCRIPTEN__
+  if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_LEFT)) gamepadButtonPressed = 1;
+  if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_UP)) gamepadButtonPressed = 0;
+#else
   if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_LEFT) ||
       IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_TRIGGER_1)) gamepadButtonPressed = 0;
   if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_UP) ||
       IsGamepadAxisPressedAny(GAMEPAD_AXIS_LEFT_TRIGGER)) gamepadButtonPressed = 1;
+#endif
   if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) gamepadButtonPressed = 2;
   if (IsGamepadButtonPressedAny(GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) gamepadButtonPressed = 3;
+
+  if (IsKeyPressed(KEY_LEFT)) gamepadButtonPressed = 0;
+  if (IsKeyPressed(KEY_UP)) gamepadButtonPressed = 1;
+  if (IsKeyPressed(KEY_RIGHT)) gamepadButtonPressed = 2;
+  if (IsKeyPressed(KEY_DOWN)) gamepadButtonPressed = 3;
 
 
   if (
@@ -376,7 +404,9 @@ void DrawButtons()
 void DrawMenu(bool isGameoverMenu)
 {
   menuRunDuration += GetFrameTime();
-  if (IsGamepadButtonDownAny(GAMEPAD_BUTTON_MIDDLE_RIGHT))
+  if (
+    IsGamepadButtonDownAny(GAMEPAD_BUTTON_MIDDLE_RIGHT) ||
+    IsKeyDown(KEY_ENTER) )
   {
     gameState = GAMESTATE_GAME;
   }
