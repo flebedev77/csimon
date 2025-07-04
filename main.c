@@ -24,6 +24,8 @@
 #define GAMEOVER_TITLE "GAME OVER!"
 #define GAMEOVER_BLINK_AMOUNT 3
 
+#define AUTHOR "Made by flebedev77"
+
 static int score = 0;
 static int highScore = 0;
 
@@ -315,8 +317,13 @@ void DrawMenu(bool isGameoverMenu)
         (float)(screenWidth/2 - menuTitleDimensions.x/2),
         (float)(screenHeight/2 - fontLg.baseSize/2)
         }, (float)fontLg.baseSize, 2, DARKGRAY);
-
   }
+
+  Vector2 creditDimensions = MeasureTextEx(fontSm, AUTHOR, (float)fontSm.baseSize, 2);
+  DrawTextEx(fontSm, AUTHOR, (Vector2){
+      (float)(screenWidth/2 - creditDimensions.x/2),
+      (float)(screenHeight - fontSm.baseSize) - 10.f
+      }, (float)fontSm.baseSize, 2, DARKGRAY);
 }
 
 // Logic
@@ -459,9 +466,12 @@ int main(void)
 
       }
 
-      snprintf(buf, sizeof(buf), "%d/%d", playerSequenceIndex, sequenceLength);
-      Vector2 texDimensions = MeasureTextEx(font, buf, (float)font.baseSize, 2);
-      DrawTextEx(font, buf, (Vector2){ (float)(screenWidth / 2 - texDimensions.x / 2), (float)(screenHeight - 100) }, (float)font.baseSize, 2, DARKGRAY);
+      if (gameState != GAMESTATE_MENU && gameState != GAMESTATE_MENU_GAMEOVER)
+      {
+        snprintf(buf, sizeof(buf), "%d/%d", playerSequenceIndex, sequenceLength);
+        Vector2 texDimensions = MeasureTextEx(font, buf, (float)font.baseSize, 2);
+        DrawTextEx(font, buf, (Vector2){ (float)(screenWidth / 2 - texDimensions.x / 2), (float)(screenHeight - 100) }, (float)font.baseSize, 2, DARKGRAY);
+      }
 
       snprintf(buf, sizeof(buf), "Score: %d", score + playerSequenceIndex);
       DrawTextEx(fontSm, buf, (Vector2){ 10.f, 10.f }, (float)fontSm.baseSize, 2, DARKGRAY);

@@ -1,3 +1,2 @@
- - Add menu
- - Change font
  - Add animations
+ - Refactor centered text rendering into its own helper function
