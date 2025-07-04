@@ -41,6 +41,7 @@ static float sequenceDisplayRate = INITIAL_SEQUENCE_DISPLAY_RATE;
 static float sequenceDisplayDelay = 0.f;
 
 static float runDuration = 0.f;
+static float menuRunDuration = 0.f;
 
 static int playerSequence[SEQUENCE_CAPACITY]; 
 static int playerSequenceIndex = 0;
@@ -225,6 +226,8 @@ void SoftReset()
 
   gameStateWaitDuration = 0.f;
   gameStateWaitRate = 0.f;
+
+  menuRunDuration = 0.f;
 }
 
 // Ran whenever the game boots up / reset
@@ -296,18 +299,19 @@ void DrawButtons()
 
 void DrawMenu(bool isGameoverMenu)
 {
+  menuRunDuration += GetFrameTime();
   if (IsGamepadButtonDownAny(GAMEPAD_BUTTON_MIDDLE_RIGHT))
   {
     gameState = GAMESTATE_GAME;
   }
 
-  if (isGameoverMenu)
+  if (isGameoverMenu && menuRunDuration < 3.f)
   {
-    Vector2 gameOverTitleDimensions = MeasureTextEx(fontLg, GAMEOVER_TITLE, (float)fontLg.baseSize, 2);  
-    DrawTextEx(fontLg, GAMEOVER_TITLE, (Vector2){
+    Vector2 gameOverTitleDimensions = MeasureTextEx(font, GAMEOVER_TITLE, (float)font.baseSize, 2);  
+    DrawTextEx(font, GAMEOVER_TITLE, (Vector2){
           (float)(screenWidth/2 - gameOverTitleDimensions.x/2),
-          (float)(screenHeight/2 - gameOverTitleDimensions.y/2) - 250.f
-        }, (float)fontLg.baseSize, 2, DARKGRAY);
+          (float)(screenHeight/2 + 30.f)
+        }, (float)font.baseSize, 2, DARKGRAY);
   }
 
   if ((int)(runDuration * 15.f) % 15 > 7)
