@@ -17,6 +17,10 @@
 #define MAX_CONTROLLER_AMOUNT 8
 
 #define BUTTON_AMOUNT 4
+#define BUTTON_SIZE 50
+#define BUTTON_LIT_SIZE 55
+#define BUTTON_COLOR_INTERPOLATION 0.4
+#define BUTTON_SIZE_INTERPOLATION 0.4
 
 #define SAVEFILE_FILEPATH ".csimon"
 
@@ -51,6 +55,10 @@ static bool buttonsLit[BUTTON_AMOUNT];
 static bool gamepadButtonsDown[BUTTON_AMOUNT];
 static int gamepadButtonPressed = -1;
 
+// This is for animations
+static float buttonSizes[BUTTON_AMOUNT];
+static Color buttonColors[BUTTON_AMOUNT];
+
 static bool isShowingSequence = false;
 static bool isWaitingBetweenButton = false;
 static bool isShowingButtonAnimation = false;
@@ -74,9 +82,11 @@ static enum {
 
 static const Color BUTTON_UNLIT_COLOR = { 200, 200, 200, 255 };
 
-static Font font;
 static Font fontSm;
+static Font font;
 static Font fontLg;
+
+static float deltaTime;
 
 //Helpers
 bool IsGamepadButtonDownAny(int button)
@@ -126,6 +136,11 @@ void LightButtons()
   {
     buttonsLit[i] = true;
   }
+}
+
+float LerpFloat(float a, float b, float t)
+{
+  return a + (b-a) * t;
 }
 
 // We read / writing in binary mode, to prevent skids from editing the savefile
@@ -209,6 +224,10 @@ void ReadSave()
 // Ran whenever player messes up, etc.
 void SoftReset()
 {
+  for (size_t i = 0; i < BUTTON_AMOUNT; i++)
+  {
+    buttonSizes[i] = BUTTON_SIZE;
+  }
   for (size_t i = 0; i < SEQUENCE_CAPACITY; i++)
   {
     playerSequence[i] = 0;
@@ -291,10 +310,34 @@ void DrawButtons()
     }
   }
 
-  DrawCircle(screenWidth/2 - 100, screenHeight/2, 50, buttonsLit[0] ? GREEN : BUTTON_UNLIT_COLOR);
-  DrawCircle(screenWidth/2, screenHeight/2 - 100, 50, buttonsLit[1] ? YELLOW : BUTTON_UNLIT_COLOR);
-  DrawCircle(screenWidth/2 + 100, screenHeight/2, 50, buttonsLit[2] ? RED : BUTTON_UNLIT_COLOR);
-  DrawCircle(screenWidth/2, screenHeight/2 + 100, 50, buttonsLit[3] ? ORANGE : BUTTON_UNLIT_COLOR);
+  Color targetButtonColors[4];
+  targetButtonColors[0] = buttonsLit[0] ? GREEN  : BUTTON_UNLIT_COLOR;
+  targetButtonColors[1] = buttonsLit[1] ? YELLOW : BUTTON_UNLIT_COLOR;
+  targetButtonColors[2] = buttonsLit[2] ? RED    : BUTTON_UNLIT_COLOR;
+  targetButtonColors[3] = buttonsLit[3] ? ORANGE : BUTTON_UNLIT_COLOR;
+
+  buttonColors[0] = ColorLerp(buttonColors[0], targetButtonColors[0], BUTTON_COLOR_INTERPOLATION);
+  buttonColors[1] = ColorLerp(buttonColors[1], targetButtonColors[1], BUTTON_COLOR_INTERPOLATION);
+  buttonColors[2] = ColorLerp(buttonColors[2], targetButtonColors[2], BUTTON_COLOR_INTERPOLATION);
+  buttonColors[3] = ColorLerp(buttonColors[3], targetButtonColors[3], BUTTON_COLOR_INTERPOLATION);
+
+  float targetButtonSizes[4];
+  targetButtonSizes[0] = buttonsLit[0] ? BUTTON_LIT_SIZE : BUTTON_SIZE;
+  targetButtonSizes[1] = buttonsLit[1] ? BUTTON_LIT_SIZE : BUTTON_SIZE;
+  targetButtonSizes[2] = buttonsLit[2] ? BUTTON_LIT_SIZE : BUTTON_SIZE;
+  targetButtonSizes[3] = buttonsLit[3] ? BUTTON_LIT_SIZE : BUTTON_SIZE;
+
+  buttonSizes[0] = LerpFloat(buttonSizes[0], targetButtonSizes[0], BUTTON_SIZE_INTERPOLATION);
+  buttonSizes[1] = LerpFloat(buttonSizes[1], targetButtonSizes[1], BUTTON_SIZE_INTERPOLATION);
+  buttonSizes[2] = LerpFloat(buttonSizes[2], targetButtonSizes[2], BUTTON_SIZE_INTERPOLATION);
+  buttonSizes[3] = LerpFloat(buttonSizes[3], targetButtonSizes[3], BUTTON_SIZE_INTERPOLATION);
+
+
+
+  DrawCircle(screenWidth/2 - 100, screenHeight/2, buttonSizes[0], buttonColors[0]);
+  DrawCircle(screenWidth/2, screenHeight/2 - 100, buttonSizes[1], buttonColors[1]);
+  DrawCircle(screenWidth/2 + 100, screenHeight/2, buttonSizes[2], buttonColors[2]);
+  DrawCircle(screenWidth/2, screenHeight/2 + 100, buttonSizes[3], buttonColors[3]);
 }
 
 void DrawMenu(bool isGameoverMenu)
@@ -354,8 +397,9 @@ int main(void)
     
     while (!WindowShouldClose())    
     {
+      DrawFPS(10, screenHeight - 50);
       char buf[100];
-      float deltaTime = GetFrameTime();
+      deltaTime = GetFrameTime();
       runDuration += deltaTime;
 
       BeginDrawing();
